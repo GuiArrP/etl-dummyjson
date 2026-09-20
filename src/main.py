@@ -1,86 +1,239 @@
+from pathlib import Path
+
+from src.config.sources import SOURCES
 from src.extract.api import get_data
 from src.load.postgres import load_to_bronze
+from src.transform.postgres import execute_sql_file
+from src.quality.checks import run_quality_checks
+from src.utils.logger import setup_logger
 
 
-API_BASE_URL = "https://dummyjson.com"
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+SQL_SILVER_PATH = PROJECT_ROOT / "sql" / "silver"
+
+logger = setup_logger()
+
+
+# ============================================================
+# BRONZE
+# ============================================================
+
+def run_bronze():
+
+    logger.info("=" * 60)
+    logger.info("INICIANDO ETAPA BRONZE")
+    logger.info("=" * 60)
+
+    for source in SOURCES:
+
+        name = source["name"]
+
+        logger.info("[%s] Extraindo dados...", name)
+
+        data = get_data(
+            url=source["url"],
+            data_key=source["data_key"]
+        )
+
+        logger.info(
+            "[%s] Registros extraídos: %s",
+            name,
+            len(data)
+        )
+
+        batch_id = load_to_bronze(
+            data=data,
+            table_name=source["bronze_table"],
+            id_field=source["id_field"]
+        )
+
+        logger.info(
+            "[%s] Registros carregados: %s",
+            name,
+            len(data)
+        )
+
+        logger.info(
+            "[%s] Batch ID: %s",
+            name,
+            batch_id
+        )
+
+
+# ============================================================
+# SILVER
+# ============================================================
+
+def run_silver():
+
+    logger.info("=" * 60)
+    logger.info("INICIANDO ETAPA SILVER")
+    logger.info("=" * 60)
+
+    sql_files = [
+        "products.sql",
+        "users.sql",
+        "carts.sql",
+        "cart_items.sql",
+    ]
+
+    for sql_file in sql_files:
+
+        file_path = SQL_SILVER_PATH / sql_file
+
+        logger.info(
+            "Executando transformação: %s",
+            sql_file
+        )
+
+        execute_sql_file(file_path)
+
+        logger.info(
+            "Transformação concluída: %s",
+            sql_file
+        )
+
+
+# ============================================================
+# SILVER - CONTAGEM DE REGISTROS
+# ============================================================
+
+def log_silver_counts():
+
+    logger.info("=" * 60)
+    logger.info("CONTAGEM DE REGISTROS - SILVER")
+    logger.info("=" * 60)
+
+    from src.transform.postgres import engine
+    from sqlalchemy import text
+
+    queries = {
+        "Products": "SELECT COUNT(*) FROM silver.products",
+        "Users": "SELECT COUNT(*) FROM silver.users",
+        "Carts": "SELECT COUNT(*) FROM silver.carts",
+        "Cart Items": "SELECT COUNT(*) FROM silver.cart_items",
+    }
+
+    with engine.begin() as connection:
+
+        for name, query in queries.items():
+
+            count = connection.execute(
+                text(query)
+            ).scalar()
+
+            logger.info(
+                "%s: %s registros",
+                name,
+                count
+            )
+
+
+# ============================================================
+# DATA QUALITY
+# ============================================================
+
+def run_quality():
+
+    logger.info("=" * 60)
+    logger.info("INICIANDO DATA QUALITY")
+    logger.info("=" * 60)
+
+    results = run_quality_checks()
+
+    has_errors = False
+
+    for result in results:
+
+        if result["status"] == "PASS":
+
+            logger.info(
+                "[PASS] %s | %s registros",
+                result["name"],
+                result["errors"]
+            )
+
+        else:
+
+            has_errors = True
+
+            logger.error(
+                "[FAIL] %s | %s registros",
+                result["name"],
+                result["errors"]
+            )
+
+    if has_errors:
+
+        raise RuntimeError(
+            "Data Quality encontrou problemas."
+        )
+
+    logger.info("DATA QUALITY: PASS")
+
+
+# ============================================================
+# PIPELINE
+# ============================================================
 
 def main():
 
-    print("=" * 50)
-    print("INICIANDO PIPELINE - BRONZE")
-    print("=" * 50)
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("INICIANDO ETL")
+    logger.info("=" * 60)
 
-    # =========================
-    # PRODUCTS
-    # =========================
+    try:
 
-    print("\n[1/3] Extraindo Products...")
+        # ------------------------------------------------------
+        # 1. EXTRACT + LOAD BRONZE
+        # ------------------------------------------------------
 
-    products = get_data(
-        url=f"{API_BASE_URL}/products",
-        data_key="products"
-    )
+        run_bronze()
 
-    print(f"Produtos extraídos: {len(products)}")
+        # ------------------------------------------------------
+        # 2. TRANSFORM BRONZE → SILVER
+        # ------------------------------------------------------
 
-    batch_products = load_to_bronze(
-        data=products,
-        table_name="products_raw",
-        id_field="id"
-    )
+        run_silver()
 
-    print(f"Products carregados | Batch: {batch_products}")
+        # ------------------------------------------------------
+        # 3. CONTAGEM DA SILVER
+        # ------------------------------------------------------
 
+        log_silver_counts()
 
-    # =========================
-    # USERS
-    # =========================
+        # ------------------------------------------------------
+        # 4. DATA QUALITY
+        # ------------------------------------------------------
 
-    print("\n[2/3] Extraindo Users...")
+        run_quality()
 
-    users = get_data(
-        url=f"{API_BASE_URL}/users",
-        data_key="users"
-    )
+        # ------------------------------------------------------
+        # FINALIZAÇÃO
+        # ------------------------------------------------------
 
-    print(f"Usuários extraídos: {len(users)}")
+        logger.info("=" * 60)
+        logger.info("PIPELINE EXECUTADO COM SUCESSO")
+        logger.info("=" * 60)
 
-    batch_users = load_to_bronze(
-        data=users,
-        table_name="users_raw",
-        id_field="id"
-    )
+    except Exception:
 
-    print(f"Users carregados | Batch: {batch_users}")
+        logger.exception(
+            "ERRO DURANTE A EXECUÇÃO DO PIPELINE"
+        )
 
-
-    # =========================
-    # CARTS
-    # =========================
-
-    print("\n[3/3] Extraindo Carts...")
-
-    carts = get_data(
-        url=f"{API_BASE_URL}/carts",
-        data_key="carts"
-    )
-
-    print(f"Carts extraídos: {len(carts)}")
-
-    batch_carts = load_to_bronze(
-        data=carts,
-        table_name="carts_raw",
-        id_field="id"
-    )
-
-    print(f"Carts carregados | Batch: {batch_carts}")
+        raise
 
 
-    print("\n" + "=" * 50)
-    print("PIPELINE BRONZE FINALIZADO")
-    print("=" * 50)
-
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
     main()
