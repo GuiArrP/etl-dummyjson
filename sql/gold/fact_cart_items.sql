@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS gold.fact_cart_items (
     product_id INTEGER NOT NULL,
     quantity INTEGER,
     unit_price NUMERIC(12,2),
-    discounted_unit_price NUMERIC(12,2),
     gross_value NUMERIC(12,2),
     discounted_value NUMERIC(12,2),
     discount_value NUMERIC(12,2),
@@ -27,41 +26,33 @@ INSERT INTO gold.fact_cart_items (
     product_id,
     quantity,
     unit_price,
-    discounted_unit_price,
     gross_value,
     discounted_value,
     discount_value
 )
+
 SELECT
     ci.cart_id,
     ci.item_sequence,
     ci.product_id,
     ci.quantity,
-    ci.price,
-    ci.discounted_price,
+
+    ci.price AS unit_price,
 
     ci.quantity * ci.price AS gross_value,
 
-    CASE
-        WHEN ci.discounted_price IS NOT NULL
-        THEN ci.quantity * ci.discounted_price
-        ELSE NULL
-    END AS discounted_value,
+    ci.discounted_total AS discounted_value,
 
-    CASE
-        WHEN ci.discounted_price IS NOT NULL
-        THEN ci.quantity * (ci.price - ci.discounted_price)
-        ELSE NULL
-    END AS discount_value
+    ci.quantity * ci.price - ci.discounted_total AS discount_value
 
 FROM silver.cart_items ci
 
 ON CONFLICT (cart_id, item_sequence)
+
 DO UPDATE SET
     product_id = EXCLUDED.product_id,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    discounted_unit_price = EXCLUDED.discounted_unit_price,
     gross_value = EXCLUDED.gross_value,
     discounted_value = EXCLUDED.discounted_value,
     discount_value = EXCLUDED.discount_value,

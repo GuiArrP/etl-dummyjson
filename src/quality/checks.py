@@ -137,8 +137,8 @@ def check_invalid_cart_item_prices():
         WHERE price IS NULL
            OR price < 0
            OR (
-                discounted_price IS NOT NULL
-                AND discounted_price < 0
+                discounted_total IS NOT NULL
+                AND discounted_total < 0
            );
     """
 

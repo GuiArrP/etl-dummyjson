@@ -16,32 +16,7 @@ Data Analyst | Power BI | Python | Data Analytics
 
 ## Arquitetura
 
-```text
-DummyJSON API
-      │
-      ▼
-   Extração
-   (Python)
-      │
-      ▼
-    Bronze
-  Dados brutos
-      │
-      ▼
-    Silver
-Dados tratados
-      │
-      ▼
- Qualidade dos
-     dados
-      │
-      ▼
-     Gold
-Modelo analítico
-      │
-      ▼
-   Power BI
-```
+![Arquitetura dos Dados](docs/arquitetura_de_dados.png)
 
 O pipeline completo é executado através do arquivo `src/main.py`.
 

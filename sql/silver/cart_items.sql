@@ -4,7 +4,7 @@ INSERT INTO silver.cart_items (
     product_id,
     quantity,
     price,
-    discounted_price,
+    discounted_total,
     ingestion_timestamp
 )
 
@@ -19,8 +19,8 @@ SELECT
 
     (item.product ->> 'price')::NUMERIC(12,2) AS price,
 
-    (item.product ->> 'discountedPrice')::NUMERIC(12,2)
-        AS discounted_price,
+    (item.product ->> 'discountedTotal')::NUMERIC(12,2)
+        AS discounted_total,
 
     latest.ingestion_timestamp
 
@@ -48,6 +48,6 @@ DO UPDATE SET
     product_id = EXCLUDED.product_id,
     quantity = EXCLUDED.quantity,
     price = EXCLUDED.price,
-    discounted_price = EXCLUDED.discounted_price,
+    discounted_total = EXCLUDED.discounted_total,
     ingestion_timestamp = EXCLUDED.ingestion_timestamp,
     processed_timestamp = NOW();
