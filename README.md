@@ -16,7 +16,7 @@ Data Analyst | Power BI | Python | Data Analytics
 
 ## Arquitetura
 
-![Arquitetura dos Dados](docs/arquitetura_de_dados.png)
+![Modelo Dimensional - Camada Gold](docs/arquitetura_de_%20dados.png)
 
 O pipeline completo é executado através do arquivo `src/main.py`.
 
